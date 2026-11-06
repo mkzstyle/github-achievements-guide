@@ -1,0 +1,46 @@
+name: Pull Shark Workflow Helper
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch target merge'
+        required: true
+        default: 'main'
+
+jobs:
+  auto_merge_pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git Identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create Test Branch & File
+        run: |
+          RUN_ID="${{ github.run_id }}"
+          BRANCH_NAME="auto-shark-${RUN_ID}"
+          git checkout -b "$BRANCH_NAME"
+          echo "Automated Pull Shark entry at $(date)" >> .shark_runs.txt
+          git add .shark_runs.txt
+          git commit -m "chore(shark): automated run ${RUN_ID}"
+          git push origin "$BRANCH_NAME"
+
+      - name: Create and Merge PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID="${{ github.run_id }}"
+          BRANCH_NAME="auto-shark-${RUN_ID}"
+          gh pr create --title "Pull Shark Automated PR ${RUN_ID}" --body "Automated PR merge for Pull Shark" --base "${{ github.event.inputs.target_branch }}" --head "$BRANCH_NAME"
+          gh pr merge "$BRANCH_NAME" --merge --delete-branch
